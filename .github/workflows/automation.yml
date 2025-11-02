@@ -21,8 +21,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install gspread google-auth requests pandas
         
+    - name: List files (debug)
+      run: ls -la
+      
     - name: Run SmartGPS Sync
       env:
         USER_API_HASH: ${{ secrets.USER_API_HASH }}
         GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-      run: python smartgps_sync.py
+      run: |
+        echo "📁 Current directory: $(pwd)"
+        echo "📄 Files in directory:"
+        ls -la
+        echo "🚀 Running script..."
+        python main.py || python smartgps_sync.py
