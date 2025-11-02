@@ -7,7 +7,7 @@ import os
 import sys
 
 print("=" * 60)
-print("🤖 SISTEMA SMARTGPS - BUSCA COMPLETA")
+print("🤖 SISTEMA SMARTGPS - ORDENAÇÃO CORRIGIDA")
 print("=" * 60)
 
 # Configurações
@@ -89,7 +89,7 @@ def buscar_todas_as_paginas():
     return todos_pedidos
 
 def atualizar_google_sheets(worksheet, pedidos):
-    """Atualiza o Google Sheets com todos os pedidos"""
+    """Atualiza o Google Sheets com ordenação por data"""
     print("⬆️ Atualizando Google Sheets...")
     
     # Processa os dados
@@ -98,6 +98,9 @@ def atualizar_google_sheets(worksheet, pedidos):
         status_map = {'A': 'Ativo', 'C': 'Cancelado', 'CD': 'Concluído', 'P': 'Pendente'}
         tipo_map = {'1': 'Instalação', '2': 'Manutenção', '3': 'Retirada'}
         
+        # Pega a data para ordenação
+        data_criacao = pedido.get('created_at', '')
+        
         linha = [
             pedido.get('id'),
             f"OS-{pedido.get('id')}",
@@ -105,15 +108,18 @@ def atualizar_google_sheets(worksheet, pedidos):
             pedido.get('plate_number', ''),
             status_map.get(pedido.get('status'), pedido.get('status_text', '')),
             tipo_map.get(pedido.get('type_order'), 'Outros'),
-            pedido.get('created_at', ''),
+            data_criacao,  # Mantém a string original para exibição
             pedido.get('client_tab_client_phone', ''),
             pedido.get('client_tab_client_address_city', ''),
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ]
-        dados_processados.append(linha)
+        dados_processados.append((data_criacao, linha))
     
-    # Ordena por ID (mais recente primeiro)
-    dados_processados.sort(key=lambda x: x[0], reverse=True)
+    # Ordena por DATA (mais recente primeiro)
+    dados_processados.sort(key=lambda x: x[0] if x[0] else '0000-00-00 00:00:00', reverse=True)
+    
+    # Remove a data de ordenação, mantém apenas os dados
+    dados_finais = [linha for _, linha in dados_processados]
     
     # Cabeçalhos
     cabecalhos = [
@@ -124,10 +130,11 @@ def atualizar_google_sheets(worksheet, pedidos):
     # Atualiza a planilha
     worksheet.clear()
     worksheet.update(range_name='A1', values=[cabecalhos])
-    if dados_processados:
-        worksheet.update(range_name='A2', values=dados_processados)
+    if dados_finais:
+        worksheet.update(range_name='A2', values=dados_finais)
     
-    print(f"✅ Google Sheets atualizado: {len(dados_processados)} pedidos")
+    print(f"✅ Google Sheets atualizado: {len(dados_finais)} pedidos")
+    print(f"📅 Ordenação: Mais recentes primeiro")
 
 def criar_resumo(pedidos):
     """Cria um resumo estatístico"""
@@ -176,7 +183,7 @@ def main():
             print("❌ Nenhum pedido encontrado")
             return
         
-        # 3. Atualizar Google Sheets
+        # 3. Atualizar Google Sheets (agora ordenado por data)
         atualizar_google_sheets(worksheet, pedidos)
         
         # 4. Mostrar resumo
@@ -184,6 +191,7 @@ def main():
         
         print(f"\n🎉 BACKUP COMPLETO CONCLUÍDO!")
         print(f"📊 {len(pedidos)} pedidos sincronizados")
+        print(f"📅 Ordenação: Mais recentes primeiro")
         print(f"⏰ Próxima execução automática: 5 minutos")
         
     except Exception as e:
