@@ -21,13 +21,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install gspread google-auth requests pandas
         
-    - name: Debug - List files
+    - name: Debug - Check secrets
       run: |
-        echo "📁 Current directory: $(pwd)"
-        echo "📄 Files:"
-        ls -la
-        echo "🐍 Python files:"
-        find . -name "*.py" -type f
+        echo "🔧 Verificando secrets..."
+        echo "USER_API_HASH length: ${#USER_API_HASH}"
+        echo "GOOGLE_CREDENTIALS length: ${#GOOGLE_CREDENTIALS}"
         
-    - name: Run Test
+    - name: Run SmartGPS Sync
+      env:
+        USER_API_HASH: ${{ secrets.USER_API_HASH }}
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
       run: python main.py
