@@ -39,7 +39,6 @@ def buscar_todas_as_paginas():
     
     todos_pedidos = []
     pagina = 1
-    total_paginas = None
     
     while True:
         try:
@@ -61,16 +60,10 @@ def buscar_todas_as_paginas():
                         break
                     
                     todos_pedidos.extend(pedidos_pagina)
+                    print(f"{len(pedidos_pagina)} pedidos")
                     
-                    # Pega o total de páginas na primeira requisição
-                    if total_paginas is None:
-                        total_paginas = dados['items'].get('last_page', 1)
-                        print(f"{len(pedidos_pagina)} pedidos (Total: ~{total_paginas} páginas)")
-                    else:
-                        print(f"{len(pedidos_pagina)} pedidos")
-                    
-                    # Verifica se chegou na última página
-                    if pagina >= total_paginas or not dados['items'].get('next_page_url'):
+                    # Verifica se há mais páginas
+                    if not dados['items'].get('next_page_url'):
                         break
                     
                     pagina += 1
@@ -88,8 +81,39 @@ def buscar_todas_as_paginas():
     print(f"🎯 Total encontrado: {len(todos_pedidos)} pedidos em {pagina} páginas")
     return todos_pedidos
 
+def ordenar_pedidos_por_data(pedidos):
+    """Ordena pedidos por data de criação (mais recente primeiro)"""
+    print("📅 Ordenando pedidos por data...")
+    
+    # Filtra pedidos com data válida e converte para datetime
+    pedidos_com_data = []
+    pedidos_sem_data = []
+    
+    for pedido in pedidos:
+        data_str = pedido.get('created_at', '')
+        if data_str and data_str != '0000-00-00 00:00:00':
+            try:
+                # Converte string para datetime para ordenação
+                data_dt = datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S")
+                pedidos_com_data.append((data_dt, pedido))
+            except:
+                pedidos_sem_data.append(pedido)
+        else:
+            pedidos_sem_data.append(pedido)
+    
+    # Ordena por data (mais recente primeiro)
+    pedidos_com_data.sort(key=lambda x: x[0], reverse=True)
+    
+    # Junta tudo: pedidos com data (ordenados) + pedidos sem data
+    pedidos_ordenados = [pedido for _, pedido in pedidos_com_data] + pedidos_sem_data
+    
+    print(f"   ✅ {len(pedidos_com_data)} pedidos com data ordenados")
+    print(f"   ⚠️  {len(pedidos_sem_data)} pedidos sem data")
+    
+    return pedidos_ordenados
+
 def atualizar_google_sheets(worksheet, pedidos):
-    """Atualiza o Google Sheets com ordenação por data"""
+    """Atualiza o Google Sheets com pedidos ordenados"""
     print("⬆️ Atualizando Google Sheets...")
     
     # Processa os dados
@@ -98,9 +122,6 @@ def atualizar_google_sheets(worksheet, pedidos):
         status_map = {'A': 'Ativo', 'C': 'Cancelado', 'CD': 'Concluído', 'P': 'Pendente'}
         tipo_map = {'1': 'Instalação', '2': 'Manutenção', '3': 'Retirada'}
         
-        # Pega a data para ordenação
-        data_criacao = pedido.get('created_at', '')
-        
         linha = [
             pedido.get('id'),
             f"OS-{pedido.get('id')}",
@@ -108,18 +129,12 @@ def atualizar_google_sheets(worksheet, pedidos):
             pedido.get('plate_number', ''),
             status_map.get(pedido.get('status'), pedido.get('status_text', '')),
             tipo_map.get(pedido.get('type_order'), 'Outros'),
-            data_criacao,  # Mantém a string original para exibição
+            pedido.get('created_at', ''),
             pedido.get('client_tab_client_phone', ''),
             pedido.get('client_tab_client_address_city', ''),
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ]
-        dados_processados.append((data_criacao, linha))
-    
-    # Ordena por DATA (mais recente primeiro)
-    dados_processados.sort(key=lambda x: x[0] if x[0] else '0000-00-00 00:00:00', reverse=True)
-    
-    # Remove a data de ordenação, mantém apenas os dados
-    dados_finais = [linha for _, linha in dados_processados]
+        dados_processados.append(linha)
     
     # Cabeçalhos
     cabecalhos = [
@@ -130,50 +145,20 @@ def atualizar_google_sheets(worksheet, pedidos):
     # Atualiza a planilha
     worksheet.clear()
     worksheet.update(range_name='A1', values=[cabecalhos])
-    if dados_finais:
-        worksheet.update(range_name='A2', values=dados_finais)
+    if dados_processados:
+        worksheet.update(range_name='A2', values=dados_processados)
     
-    print(f"✅ Google Sheets atualizado: {len(dados_finais)} pedidos")
-    print(f"📅 Ordenação: Mais recentes primeiro")
-
-def criar_resumo(pedidos):
-    """Cria um resumo estatístico"""
-    if not pedidos:
-        return
-    
-    # Contadores
-    por_status = {}
-    por_tipo = {}
-    
-    for pedido in pedidos:
-        status = pedido.get('status_text', 'Desconhecido')
-        tipo = pedido.get('type_order', '0')
-        
-        por_status[status] = por_status.get(status, 0) + 1
-        
-        tipo_map = {'1': 'Instalação', '2': 'Manutenção', '3': 'Retirada'}
-        tipo_nome = tipo_map.get(tipo, 'Outros')
-        por_tipo[tipo_nome] = por_tipo.get(tipo_nome, 0) + 1
-    
-    print(f"\n📊 RESUMO ESTATÍSTICO:")
-    print(f"   📦 Total de pedidos: {len(pedidos)}")
-    print(f"   📋 Por status:")
-    for status, count in por_status.items():
-        print(f"      - {status}: {count}")
-    
-    print(f"   🔧 Por tipo:")
-    for tipo, count in por_tipo.items():
-        print(f"      - {tipo}: {count}")
+    print(f"✅ Google Sheets atualizado: {len(dados_processados)} pedidos")
+    print("📅 ORDENAÇÃO: Mais recentes no TOPO")
 
 def main():
     """Executa sincronização completa"""
-    print(f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')} - INICIANDO BACKUP COMPLETO...")
+    print(f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')} - INICIANDO...")
     
     try:
         # 1. Conectar Google Sheets
         worksheet = conectar_google_sheets()
         if not worksheet:
-            print("❌ Falha na conexão com Google Sheets")
             return
         
         # 2. Buscar TODOS os pedidos
@@ -183,19 +168,18 @@ def main():
             print("❌ Nenhum pedido encontrado")
             return
         
-        # 3. Atualizar Google Sheets (agora ordenado por data)
-        atualizar_google_sheets(worksheet, pedidos)
+        # 3. ORDENAR por data (MAIS IMPORTANTE!)
+        pedidos_ordenados = ordenar_pedidos_por_data(pedidos)
         
-        # 4. Mostrar resumo
-        criar_resumo(pedidos)
+        # 4. Atualizar Google Sheets
+        atualizar_google_sheets(worksheet, pedidos_ordenados)
         
-        print(f"\n🎉 BACKUP COMPLETO CONCLUÍDO!")
-        print(f"📊 {len(pedidos)} pedidos sincronizados")
-        print(f"📅 Ordenação: Mais recentes primeiro")
-        print(f"⏰ Próxima execução automática: 5 minutos")
+        print(f"\n🎉 SINCRONIZAÇÃO CONCLUÍDA!")
+        print(f"📊 {len(pedidos)} pedidos processados")
+        print(f"📅 Ordenação: MAIS RECENTES NO TOPO ✅")
         
     except Exception as e:
-        print(f"💥 Erro na sincronização: {e}")
+        print(f"💥 Erro: {e}")
 
 if __name__ == "__main__":
     main()
