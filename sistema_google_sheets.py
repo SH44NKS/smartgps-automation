@@ -101,46 +101,54 @@ def buscar_todas_as_paginas():
     print(f"🎯 Total encontrado: {len(todos_pedidos)} pedidos")
     return todos_pedidos
 
-def atualizar_google_sheets(worksheet, todos_pedidos):
+def atualizar_google_sheets(worksheet, pedidos):
     """Atualiza o Google Sheets com todos os pedidos"""
     print("⬆️ Atualizando Google Sheets...")
     
     # Processa os dados
     dados_processados = []
-    for pedido in todos_pedidos:
+    for pedido in pedidos:
         status_map = {'A': 'Ativo', 'C': 'Cancelado', 'CD': 'Concluído', 'P': 'Pendente'}
         tipo_map = {'1': 'Instalação', '2': 'Manutenção', '3': 'Retirada'}
+        
+        # Converte a data para objeto datetime para ordenação
+        data_criacao = pedido.get('created_at', '')
         
         linha = [
             pedido.get('id'),
             f"OS-{pedido.get('id')}",
             pedido.get('client_name', ''),
             pedido.get('plate_number', ''),
-            pedido.get('vehicle_tab_brand', ''),
-            pedido.get('vehicle_model', ''),
             status_map.get(pedido.get('status'), pedido.get('status_text', '')),
             tipo_map.get(pedido.get('type_order'), 'Outros'),
-            pedido.get('created_at', ''),
+            data_criacao,  # Mantém a string original
             pedido.get('client_tab_client_phone', ''),
             pedido.get('client_tab_client_address_city', ''),
-            pedido.get('client_tab_client_address_state', ''),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Última atualização
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ]
-        dados_processados.append(linha)
+        dados_processados.append((data_criacao, linha))  # Guarda a data para ordenação
     
-    # Ordena por ID (mais recente primeiro)
-    dados_processados.sort(key=lambda x: x[0], reverse=True)
+    # Ordena por DATA (mais recente primeiro)
+    # Pedidos sem data vão para o final
+    dados_processados.sort(key=lambda x: x[0] if x[0] else '0000-00-00 00:00:00', reverse=True)
+    
+    # Remove a data de ordenação, mantém apenas os dados
+    dados_finais = [linha for _, linha in dados_processados]
     
     # Cabeçalhos
-    cabecalhos = ['ID', 'OS', 'Cliente', 'Veículo', 'Marca', 'Modelo', 
-                  'Status', 'Tipo', 'Data Criação', 'Telefone', 'Cidade', 'Estado', 'Última Atualização']
+    cabecalhos = [
+        'ID', 'OS', 'Cliente', 'Veículo', 'Status', 'Tipo', 
+        'Data Criação', 'Telefone', 'Cidade', 'Última Atualização'
+    ]
     
-    # Limpa e atualiza a planilha
+    # Atualiza a planilha
     worksheet.clear()
     worksheet.update(range_name='A1', values=[cabecalhos])
-    worksheet.update(range_name='A2', values=dados_processados)
+    if dados_finais:
+        worksheet.update(range_name='A2', values=dados_finais)
     
-    print(f"✅ Google Sheets atualizado: {len(dados_processados)} pedidos")
+    print(f"✅ Google Sheets atualizado: {len(dados_finais)} pedidos")
+    print(f"📅 Ordenação: Mais recentes primeiro")
 
 def executar_sincronizacao():
     """Executa uma sincronização completa"""
@@ -240,4 +248,5 @@ def main():
     time.sleep(10)
 
 if __name__ == "__main__":
+
     main()
