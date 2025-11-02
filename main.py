@@ -7,7 +7,7 @@ import os
 import sys
 
 print("=" * 60)
-print("🤖 SISTEMA SMARTGPS - GITHUB ACTIONS")
+print("🤖 SISTEMA SMARTGPS - BUSCA COMPLETA")
 print("=" * 60)
 
 # Configurações
@@ -33,30 +33,49 @@ def conectar_google_sheets():
         print(f"❌ Erro ao conectar Google Sheets: {e}")
         return None
 
-def buscar_pedidos_smartgps():
-    """Busca pedidos do SmartGPS"""
-    print("🔍 Buscando pedidos do SmartGPS...")
+def buscar_todas_as_paginas():
+    """Busca TODAS as páginas disponíveis"""
+    print("🔍 Buscando TODOS os pedidos...")
     
     todos_pedidos = []
+    pagina = 1
+    total_paginas = None
     
-    for pagina in range(1, 6):  # 5 páginas
+    while True:
         try:
             print(f"   📄 Página {pagina}...", end=" ")
             
             response = requests.get(
                 f"{base_url}/api/get_orders",
                 params={"user_api_hash": user_api_hash, "page": pagina},
-                timeout=15
+                timeout=20
             )
             
             if response.status_code == 200:
                 dados = response.json()
+                
                 if 'items' in dados and 'data' in dados['items']:
                     pedidos_pagina = dados['items']['data']
+                    
+                    if not pedidos_pagina:  # Página vazia
+                        break
+                    
                     todos_pedidos.extend(pedidos_pagina)
-                    print(f"{len(pedidos_pagina)} pedidos")
+                    
+                    # Pega o total de páginas na primeira requisição
+                    if total_paginas is None:
+                        total_paginas = dados['items'].get('last_page', 1)
+                        print(f"{len(pedidos_pagina)} pedidos (Total: ~{total_paginas} páginas)")
+                    else:
+                        print(f"{len(pedidos_pagina)} pedidos")
+                    
+                    # Verifica se chegou na última página
+                    if pagina >= total_paginas or not dados['items'].get('next_page_url'):
+                        break
+                    
+                    pagina += 1
+                    
                 else:
-                    print("estrutura inesperada")
                     break
             else:
                 print(f"erro {response.status_code}")
@@ -66,7 +85,7 @@ def buscar_pedidos_smartgps():
             print(f"erro: {e}")
             break
     
-    print(f"🎯 Total encontrado: {len(todos_pedidos)} pedidos")
+    print(f"🎯 Total encontrado: {len(todos_pedidos)} pedidos em {pagina} páginas")
     return todos_pedidos
 
 def atualizar_google_sheets(worksheet, pedidos):
@@ -141,7 +160,7 @@ def criar_resumo(pedidos):
 
 def main():
     """Executa sincronização completa"""
-    print(f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')} - INICIANDO SINCRONIZAÇÃO...")
+    print(f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')} - INICIANDO BACKUP COMPLETO...")
     
     try:
         # 1. Conectar Google Sheets
@@ -150,8 +169,8 @@ def main():
             print("❌ Falha na conexão com Google Sheets")
             return
         
-        # 2. Buscar pedidos
-        pedidos = buscar_pedidos_smartgps()
+        # 2. Buscar TODOS os pedidos
+        pedidos = buscar_todas_as_paginas()
         
         if not pedidos:
             print("❌ Nenhum pedido encontrado")
@@ -163,9 +182,9 @@ def main():
         # 4. Mostrar resumo
         criar_resumo(pedidos)
         
-        print(f"\n🎉 SINCRONIZAÇÃO CONCLUÍDA COM SUCESSO!")
+        print(f"\n🎉 BACKUP COMPLETO CONCLUÍDO!")
         print(f"📊 {len(pedidos)} pedidos sincronizados")
-        print(f"⏰ Próxima execução: 5 minutos")
+        print(f"⏰ Próxima execução automática: 5 minutos")
         
     except Exception as e:
         print(f"💥 Erro na sincronização: {e}")
