@@ -1,0 +1,1 @@
+# smartgps-automation
